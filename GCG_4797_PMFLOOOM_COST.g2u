@@ -1,0 +1,922 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Size(13830,8775)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.GGC_ProjCost.Create(GsGridControl)
+Gui.Form.GGC_ProjCost.Size(13320,5400)
+Gui.Form.GGC_ProjCost.Position(135,1770)
+Gui.Form.GGC_ProjCost.Event(RowCellClick,ProjCost_RowCellClick)
+Gui.Form.cmdExport.Create(Button)
+Gui.Form.cmdExport.Size(855,375)
+Gui.Form.cmdExport.Position(315,7545)
+Gui.Form.cmdExport.Caption("Export")
+Gui.Form.cmdExport.Event(Click,cmdExport_Click)
+Gui.Form.frameHeader.Create(Frame)
+Gui.Form.frameHeader.Size(13275,1500)
+Gui.Form.frameHeader.Position(120,135)
+Gui.Form.frameHeader.Anchor(13)
+Gui.Form.lblChkPnt.Create(Label,"Check Point",True,1395,255,0,660,285,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lblChkPnt.Parent("frameHeader")
+Gui.Form.txtChkPnt.Create(TextBox,"",True,1215,300,0,615,510,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtChkPnt.Parent("frameHeader")
+Gui.Form.cmdBrwFrom.Create(Button)
+Gui.Form.cmdBrwFrom.Size(375,375)
+Gui.Form.cmdBrwFrom.Position(1845,510)
+Gui.Form.cmdBrwFrom.Caption("^")
+Gui.Form.cmdBrwFrom.Event(Click,cmdBrwFrom_Click)
+Gui.Form.cmdBrwFrom.Parent("frameHeader")
+Gui.Form.cmdClear.Create(Button)
+Gui.Form.cmdClear.Size(855,375)
+Gui.Form.cmdClear.Position(8160,510)
+Gui.Form.cmdClear.Caption("Clear")
+Gui.Form.cmdClear.Event(Click,cmdClear_Click)
+Gui.Form.cmdClear.Parent("frameHeader")
+Gui.Form.cmdView.Create(Button)
+Gui.Form.cmdView.Size(855,375)
+Gui.Form.cmdView.Position(6825,510)
+Gui.Form.cmdView.Caption("View")
+Gui.Form.cmdView.Event(Click,cmdView_Click)
+Gui.Form.cmdView.Parent("frameHeader")
+Gui.Form.Project.Create(Label,"Project",True,1005,255,0,2775,285,True,0,"Arial",8,-2147483633,0)
+Gui.Form.Project.Parent("frameHeader")
+Gui.Form.cmdBrwProj.Create(Button)
+Gui.Form.cmdBrwProj.Size(375,375)
+Gui.Form.cmdBrwProj.Position(3975,510)
+Gui.Form.cmdBrwProj.Caption("^")
+Gui.Form.cmdBrwProj.Event(Click,cmdBrwProj_Click)
+Gui.Form.cmdBrwProj.Parent("frameHeader")
+Gui.Form.txtProject.Create(TextBox,"",True,1215,300,0,2745,510,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtProject.Parent("frameHeader")
+Gui.Form.chkAllDates.Create(CheckBox)
+Gui.Form.chkAllDates.Size(2535,360)
+Gui.Form.chkAllDates.Position(645,945)
+Gui.Form.chkAllDates.Caption("All Dates Prior to CheckPoint")
+Gui.Form.chkAllDates.Parent("frameHeader")
+Gui.Form.cmdLoc.Create(Button)
+Gui.Form.cmdLoc.Size(375,375)
+Gui.Form.cmdLoc.Position(5625,510)
+Gui.Form.cmdLoc.Parent("frameHeader")
+Gui.Form.cmdLoc.Caption("^")
+Gui.Form.cmdLoc.Event(Click,cmdLoc_Click)
+Gui.Form.txtLoc.Create(TextBox,"",True,690,300,0,4935,510,True,0,"Arial",8,-2147483643,1)
+Gui.Form.txtLoc.Parent("frameHeader")
+Gui.Form.lbl1.Create(Label,"Location",True,1020,255,0,4905,285,True,0,"Arial",8,-2147483633,0)
+Gui.Form.lbl1.Parent("frameHeader")
+Gui.Form.chkByProject.Create(CheckBox)
+Gui.Form.chkByProject.Size(3090,360)
+Gui.Form.chkByProject.Position(3960,960)
+Gui.Form.chkByProject.Parent("frameHeader")
+Gui.Form.chkByProject.Caption("Export Totals by Project")
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.dFrom.Declare(Date)
+V.Global.dTo.Declare(Date)
+V.Global.sWhere.Declare(String)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+	F.Intrinsic.Control.Try
+	
+	F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass,10000)
+	
+	'set form anchors
+	Gui.Form.GGC_ProjCost.anchor(15)
+	Gui.Form.cmdExport.anchor(6)
+	
+	Gui.Form..Show
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.build_chkpnt.Start
+'this sub builds the data based on a using a checkpiont date only
+F.Intrinsic.Control.Try
+	V.Local.sSql.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.iCount.Declare(Long)
+	V.Local.fOutside.Declare(Float)
+	V.Local.fMaterial.Declare(Float)
+	V.Local.fTotal.Declare(Float,0)
+	
+	'get the date range based on the form
+	F.Intrinsic.Control.CallSub(date_range)
+	
+	'this section should only include projects that have rev rec turned on.
+	F.Intrinsic.String.Build("select jd.lmo, jd.tran, im.code_sort, sum(jd.amount_labor) as direct, sum(jd.amt_overhead) as overhead from v_project_master pm left join v_project_xref px on pm.project = px.project left join V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = jo.seq LEFT JOIN v_job_detail jd on JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART where pm.date_closed = '1900-01-01' and pm.recognize_rev = 'Y' and jo.proj_group <> '99X' AND JD.LMO <> 'Z'and JD.edited_wo_dtl <> 'R' and JD.flag_indirect <> 'I' and jd.charge_date between '{0}' and '{1}' and jd.employee <> 'UNATTENDED O/H' group by im.code_sort, jd.lmo, jd.tran order by jd.lmo, jd.tran;",V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+	'if we're including location
+	F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+		F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	
+	'create a temp datatable
+	F.Data.DataTable.CreateFromSQL("COST_TEMP","CON",V.Local.sSql,True)
+	
+	'create the datatable for the grid
+	F.Data.DataTable.Create("COST",True)
+	F.Data.DataTable.AddColumn("COST","TYPE","STRING")
+	F.Data.DataTable.AddColumn("COST","DESCRIPTION","STRING")
+	F.Data.DataTable.AddColumn("COST","CREDIT","NUMERIC")
+	F.Data.DataTable.AddColumn("COST","DEBIT","NUMERIC")
+	
+	'loop through the temp table and arrange the data how we want in the COST datatable
+	F.Intrinsic.Control.For(V.Local.iCount,0,V.DataTable.COST_TEMP.RowCount--,1)
+		F.Intrinsic.Control.SelectCase(V.DataTable.COST_TEMP(V.Local.iCount).LMO!FieldValTrim)
+		
+			'there should only be one "L" type that hold both labor and overhead costs
+			F.Intrinsic.Control.Case("L")
+				F.Data.DataTable.AddRow("COST","TYPE","L","DESCRIPTION","LABOR","CREDIT",0,"DEBIT",V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat)
+				F.Data.DataTable.AddRow("COST","TYPE","O","DESCRIPTION","OVERHEAD","CREDIT",0,"DEBIT",V.DataTable.COST_TEMP(V.Local.iCount).Overhead!FieldValFloat)
+				
+			'could be several M type since they are including "sort code".  50 and 52 are direct receipts to work orders.
+			'case 3 is an ap transaction for miscellaneous materials "other"
+			F.Intrinsic.Control.Case("M")
+				F.Intrinsic.Control.SelectCase(V.DataTable.COST_TEMP(V.Local.iCount).Tran!FieldValTrim)
+				
+					F.Intrinsic.Control.Case("2")
+						F.Data.DataTable.AddRow("COST","TYPE","M","DESCRIPTION",V.DataTable.COST_TEMP(V.Local.iCount).CODE_SORT!FieldValTrim,"CREDIT",0,"DEBIT",V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat)
+						
+					F.Intrinsic.Control.Case("3")
+						F.Data.DataTable.AddRow("COST","TYPE","O","DESCRIPTION","OTHER","CREDIT",0,"DEBIT",V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat)
+						
+					F.Intrinsic.Control.Case("50")
+						F.Intrinsic.Math.Add(V.Local.fMaterial,V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat,V.Local.fMaterial)
+						
+					F.Intrinsic.Control.Case("52")
+						F.Intrinsic.Math.Add(V.Local.fMaterial,V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat,V.Local.fMaterial)
+						
+				F.Intrinsic.Control.EndSelect
+				
+			'O type - case 3 is an ap transaction for freight
+			F.Intrinsic.Control.Case("O")
+				F.Intrinsic.Control.SelectCase(V.DataTable.COST_TEMP(V.Local.iCount).Tran!FieldValTrim)
+				
+					F.Intrinsic.Control.Case("3")
+						F.Data.DataTable.AddRow("COST","TYPE","F","DESCRIPTION","FREIGHT","CREDIT",0,"DEBIT",V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat)
+						
+					F.Intrinsic.Control.Case("50")
+						F.Intrinsic.Math.Add(V.Local.fOutside,V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat,V.Local.fOutside)
+						
+					F.Intrinsic.Control.Case("52")
+						F.Intrinsic.Math.Add(V.Local.fOutside,V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat,V.Local.fOutside)
+						
+				F.Intrinsic.Control.EndSelect
+				
+		F.Intrinsic.Control.EndSelect
+		
+		F.Intrinsic.Math.Add(V.Local.fTotal,V.DataTable.COST_TEMP(V.Local.iCount).Direct!FieldValFloat,V.Local.fTotal)
+		F.Intrinsic.Math.Add(V.Local.fTotal,V.DataTable.COST_TEMP(V.Local.iCount).Overhead!FieldValFloat,V.Local.fTotal)
+		
+	F.Intrinsic.Control.Next(V.Local.iCount)
+	
+	F.Data.DataTable.AddRow("COST","TYPE","M","DESCRIPTION","MISC","CREDIT",0,"DEBIT",V.Local.fMaterial)
+	F.Data.DataTable.AddRow("COST","TYPE","O","DESCRIPTION","OUTSIDE","CREDIT",0,"DEBIT",V.Local.fOutside)
+	F.Data.DataTable.AddRow("COST","TYPE","C","DESCRIPTION","COST OF GOODS","CREDIT",V.Local.fTotal,"DEBIT",0)
+	
+	
+	'CREATE THE VIEW
+	F.Data.DataView.Create("COST","V_COST",22)
+	
+	'Create grid view
+	Gui.Form.GGC_ProjCost.AddGridviewFromDataview("Project_GV","COST","V_COST")
+	F.Intrinsic.Control.CallSub(format_grid)
+	Gui.Form.GGC_ProjCost.MainView("Project_GV")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.build_chkpnt.End
+
+Program.Sub.build_proj.Start
+'this builds the data based on a selected project
+F.Intrinsic.Control.Try
+	V.Local.sSql.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.sTemp.Declare(String)
+	V.Local.iCount.Declare(Long)
+	V.Local.iRec.Declare(Long)
+	
+	F.Intrinsic.Control.If(V.Screen.Form!chkAllDates.CheckedAsBoolean,=,False)
+		F.Intrinsic.Control.CallSub(Date_Range)
+		F.Intrinsic.String.Build("select rtrim(PM.PROJECT) as PROJECT, PM.CUSTOMER, CM.NAME_CUSTOMER, PM.DESCR FROM V_PROJECT_MASTER PM LEFT JOIN V_CUSTOMER_MASTER CM ON PM.CUSTOMER = CM.CUSTOMER WHERE PROJECT = '{0}'",V.Screen.Form!txtProject.Text,V.Local.sSql)
+		F.Data.DataTable.CreateFromSQL("PROJECT","CON",V.Local.sSql,True)
+		'totals per cost type LMO and TRAN <> 3.  NOTE:  tran type 3 are charges coming from AP and will fall in to freight and other, not LMO.
+		F.Intrinsic.String.Build("select PM.PROJECT, JD.LMO AS TYPE, SUM(JD.AMOUNT_LABOR) as AMOUNT, SUM(JD.AMT_OVERHEAD) AS OVERHEAD FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z' AND JD.TRAN <> '3' AND PM.PROJECT = '{0}' AND JD.CHARGE_DATE BETWEEN '{1}' AND '{2}' GROUP BY PM.PROJECT, JD.LMO",V.Screen.Form!txtProject.Text,V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		'manually build the totals datatable
+		F.Data.DataTable.AddTable("PROJECT","TOTALS")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","PROJECT","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","MATERIAL","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","LABOR","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OVERHEAD","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OUTSIDE","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","FREIGHT","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OTHER","STRING")
+		F.Data.DataTable.AddRow("PROJECT$TOTALS","PROJECT",V.Screen.Form!txtProject.Text)
+		
+		'Add the totals for the returned values above.
+		F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+		F.Intrinsic.String.Split(V.Local.sRet,"#$#",V.Local.sRet)
+		
+		F.Intrinsic.Control.For(V.Local.iCount,0,V.Local.sRet.UBound,1)
+			F.Intrinsic.String.Split(V.Local.sRet(V.Local.iCount),"*!*",V.Local.sTemp)
+			
+				F.Intrinsic.Control.SelectCase(V.Local.sTemp(1))
+				
+					F.Intrinsic.Control.Case("M")
+						F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"MATERIAL",V.Local.sTemp(2))
+						
+					F.Intrinsic.Control.Case("L")
+						F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"LABOR",V.Local.sTemp(2),"OVERHEAD",V.Local.sTemp(3))
+						
+					F.Intrinsic.Control.Case("O")
+						F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"OUTSIDE",V.Local.sTemp(2))
+						
+				F.Intrinsic.Control.EndSelect
+				
+		F.Intrinsic.Control.Next(V.Local.iCount)
+		
+		'get FREIGHT and OTHER from AP transactions posted to jobs
+		F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, SUM(JD.AMOUNT_LABOR) as AMOUNT FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z' AND JD.TRAN = '3' AND PM.PROJECT = '{0}' AND JD.CHARGE_DATE BETWEEN '{1}' AND '{2}' GROUP BY PM.PROJECT, JD.LMO",V.Screen.Form!txtProject.Text,V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+		
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		'add the totals for the returned values above
+		F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+		F.Intrinsic.String.Split(V.Local.sRet,"#$#",V.Local.sRet)
+		
+		F.Intrinsic.Control.For(V.Local.iCount,0,V.Local.sRet.UBound,1)
+			F.Intrinsic.String.Split(V.Local.sRet(V.Local.iCount),"*!*",V.Local.sTemp)
+			
+			F.Intrinsic.Control.SelectCase(V.Local.sTemp(1))
+			
+				F.Intrinsic.Control.Case("M")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"OTHER",V.Local.sTemp(2))
+					
+				F.Intrinsic.Control.Case("O")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"FREIGHT",V.Local.sTemp(2))
+					
+				F.Intrinsic.Control.Case("L")
+					V.Local.iRec.Set(V.DataTable.PROJECT$TOTALS(0).Labor!FieldVal)
+					F.Intrinsic.Math.Add(V.Local.iRec,V.Local.sTemp(3),V.Local.iRec)
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"LABOR",V.Local.iRec)
+					
+			F.Intrinsic.Control.EndSelect
+			
+		F.Intrinsic.Control.Next(V.Local.iCount)	
+		
+		'detail records
+		F.Intrinsic.String.Build("SELECT RTRIM(PM.PROJECT) AS PROJECT, JD.JOB, JD.SUFFIX, JD.SEQ, JD.TRAN AS TYPE, JD.CHARGE_DATE AS TRX_DATE, JD.LMO, JD.AMOUNT_LABOR AS COST, JD.AMT_OVERHEAD AS OVERHEAD FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE PM.PROJECT = '{0}' AND JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z' AND JD.CHARGE_DATE BETWEEN '{1}' AND '{2}'",V.Screen.Form!txtProject.Text,V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+		
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		F.Data.DataTable.CreateFromSQL("PROJECT$TOTALS$DETAILS","CON",V.Local.sSql,True)
+		
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, PM.CUSTOMER, CM.NAME_CUSTOMER, PM.DESCR FROM V_PROJECT_MASTER PM LEFT JOIN V_CUSTOMER_MASTER CM ON PM.CUSTOMER = CM.CUSTOMER WHERE PROJECT = '{0}'",V.Screen.Form!txtProject.Text,V.Local.sSql)
+		F.Data.DataTable.CreateFromSQL("PROJECT","CON",V.Local.sSql,True)
+		'totals per cost type
+		F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, SUM(JD.AMOUNT_LABOR) as AMOUNT, SUM(JD.AMT_OVERHEAD) AS OVERHEAD FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE PM.PROJECT = '{0}' AND JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z' AND JD.TRAN <> '3' GROUP BY PM.PROJECT, JD.LMO ",V.Screen.Form!txtProject.Text,V.Local.sSql)
+		
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		'manually create the totals datatable
+		F.Data.DataTable.AddTable("PROJECT","TOTALS")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","PROJECT","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","MATERIAL","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","LABOR","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OVERHEAD","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OUTSIDE","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","FREIGHT","STRING")
+		F.Data.DataTable.AddColumn("PROJECT$TOTALS","OTHER","STRING")
+		F.Data.DataTable.AddRow("PROJECT$TOTALS","PROJECT",V.Screen.Form!txtProject.Text)
+		
+		'Add the totals for the returned values above.
+		F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+		F.Intrinsic.String.Split(V.Local.sRet,"#$#",V.Local.sRet)
+		
+		F.Intrinsic.Control.For(V.Local.iCount,0,V.Local.sRet.UBound,1)
+			F.Intrinsic.String.Split(V.Local.sRet(V.Local.iCount),"*!*",V.Local.sTemp)
+			
+			F.Intrinsic.Control.SelectCase(V.Local.sTemp(1))
+			
+				F.Intrinsic.Control.Case("M")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"MATERIAL",V.Local.sTemp(2))
+					
+				F.Intrinsic.Control.Case("L")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"LABOR",V.Local.sTemp(2),"OVERHEAD",V.Local.sTemp(3))
+					
+				F.Intrinsic.Control.Case("O")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"OUTSIDE",V.Local.sTemp(2))
+					
+			F.Intrinsic.Control.EndSelect
+			
+		F.Intrinsic.Control.Next(V.Local.iCount)
+		
+		'get FREIGHT and OTHER from AP transactions posted to jobs
+		F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, SUM(JD.AMOUNT_LABOR) as AMOUNT FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL = 'R' AND JD.LMO <> 'Z' AND JD.TRAN = '3' AND PM.PROJECT = '{0}' GROUP BY PM.PROJECT, JD.LMO",V.Screen.Form!txtProject.Text,V.Local.sSql)
+		
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		'add the totals for the returned values above
+		F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+		F.Intrinsic.String.Split(V.Local.sRet,"#$#",V.Local.sRet)
+		
+		F.Intrinsic.Control.For(V.Local.iCount,0,V.Local.sRet.UBound,1)
+			F.Intrinsic.String.Split(V.Local.sRet(V.Local.iCount),"*!*",V.Local.sTemp)
+			
+			F.Intrinsic.Control.SelectCase(V.Local.sTemp(1))
+			
+				F.Intrinsic.Control.Case("M")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"OTHER",V.Local.sTemp(2))
+					
+				F.Intrinsic.Control.Case("O")
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"FREIGHT",V.Local.sTemp(2))
+					
+				F.Intrinsic.Control.Case("L")
+					V.Local.iRec.Set(V.DataTable.PROJECT$TOTALS(0).Labor!FieldVal)
+					F.Intrinsic.Math.Add(V.Local.iRec,V.Local.sTemp(3),V.Local.iRec)
+					F.Data.DataTable.SetValue("PROJECT$TOTALS",0,"LABOR",V.Local.iRec)
+					
+			F.Intrinsic.Control.EndSelect
+			
+		F.Intrinsic.Control.Next(V.Local.iCount)
+	
+		'detail records
+		F.Intrinsic.String.Build("SELECT RTRIM(PM.PROJECT) AS PROJECT, JD.JOB, JD.SUFFIX, JD.SEQ, JD.TRAN AS TYPE, JD.CHARGE_DATE AS TRX_DATE, JD.LMO, JD.AMOUNT_LABOR AS COST, JD.AMT_OVERHEAD AS OVERHEAD FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION  WHERE PM.PROJECT = '{0}' AND JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z'",V.Screen.Form!txtProject.Text,V.Local.sSql)
+		
+		'include location if it was selected on the screen
+		F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+			F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+		F.Intrinsic.Control.EndIf
+		
+		F.Data.DataTable.CreateFromSQL("PROJECT$TOTALS$DETAILS","CON",V.Local.sSql,True)
+		
+	F.Intrinsic.Control.EndIf
+	'Project header record
+	
+	'Create views and relationships
+	F.Data.DataView.Create("PROJECT","V_PROJECT",22)
+	F.Data.DataView.Create("PROJECT$TOTALS","V_TOTALS",22)
+	F.Data.DataView.Create("PROJECT$TOTALS$DETAILS","V_DETAILS",22)
+	F.Data.DataTable.AddRelation("PROJECT","PROJECT","PROJECT$TOTALS","PROJECT")
+	F.Data.DataTable.AddRelation("PROJECT$TOTALS","PROJECT","PROJECT$TOTALS$DETAILS","PROJECT")
+	
+	'Create grid view
+	Gui.Form.GGC_ProjCost.AddGridviewFromDataview("Project_GV","PROJECT","V_PROJECT")
+	Gui.Form.GGC_ProjCost.AddGridviewFromDataview("Total_GV","PROJECT","V_TOTALS")
+	Gui.Form.GGC_ProjCost.AddGridviewFromDataview("Details_GV","PROJECT","V_DETAILS")
+	F.Intrinsic.Control.CallSub(format_grid)
+	Gui.Form.GGC_ProjCost.MainView("Project_GV")
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.build_proj.End
+
+Program.Sub.build_byproject.Start
+'this builds an export OF all projects 
+F.Intrinsic.Control.Try
+	
+	V.Local.sSql.Declare(String)
+	V.Local.iCount.Declare(Long)
+	V.Local.sName.Declare(String,"GCG_4797_OUTPUT.xltx")
+	
+	F.Intrinsic.Control.CallSub(date_range)
+	
+	'PM.RECOGNIZE_REV = 'Y' AND
+	'getting values stored in amount_labor from job_detail.
+	F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, IM.CODE_SORT AS DESCR, CONVERT(SUM(JD.AMOUNT_LABOR),SQL_NUMERIC) as AMOUNT FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE pm.date_closed = '1900-01-01' and JO.PROJ_GROUP <> '99X' AND JD.EDITED_WO_DTL <> 'R' AND JD.LMO <> 'Z' AND JD.TRAN <> '3' AND JD.EMPLOYEE <> 'UNATTENDED O/H' AND JD.CHARGE_DATE BETWEEN '{0}' AND '{1}' GROUP BY PM.PROJECT, JD.LMO, IM.CODE_SORT ORDER BY PM.PROJECT, JD.LMO, IM.CODE_SORT",V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+	'include location if it was selected on the screen
+	F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+		F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	'PROJECT | TYPE | DESC | AMOUNT
+	
+	'create the datatable
+	F.Data.DataTable.CreateFromSQL("COST","CON",V.Local.sSql,True)
+	
+	F.Intrinsic.Control.For(V.Local.iCount,0,V.DataTable.COST.ActiveRowCount--,1)
+	
+		F.Intrinsic.Control.If(V.DataTable.COST(V.Local.iCount).TYPE!FieldValTrim,=,"L")
+			F.Data.DataTable.SetValue("COST",V.Local.iCount,"DESCR","LABOR")
+		F.Intrinsic.Control.ElseIf(V.DataTable.COST(V.Local.iCount).TYPE!FieldValTrim,=,"O")
+			F.Data.DataTable.SetValue("COST",V.Local.iCount,"DESCR","OUTSIDE")
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.Next(V.Local.iCount)
+	
+	'PM.RECOGNIZE_REV = 'Y' AND
+	'get the amt_overhead stored in job_detail
+	F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, CONVERT(SUM(JD.AMT_OVERHEAD),SQL_NUMERIC) as AMOUNT FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE pm.date_closed = '1900-01-01' and JO.PROJ_GROUP <> '99X' AND JD.LMO = 'L' AND JD.EDITED_WO_DTL <> 'R' AND JD.TRAN <> '3' AND JD.CHARGE_DATE BETWEEN '{0}' AND '{1}' GROUP BY PM.PROJECT, JD.LMO, IM.CODE_SORT ORDER BY PM.PROJECT, JD.LMO, IM.CODE_SORT",V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Screen.Form!txtLoc.Text,V.Local.sSql)
+	
+	'include location if it was selected on the screen
+	F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+		F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	'PROJECT | TYPE = L | AMOUNT
+	
+	'add row for overhead
+	F.Data.DataTable.CreateFromSQL("OVERHEAD","CON",V.Local.sSql)
+	
+	'loop through the data table and add the records to "COST"
+	F.Intrinsic.Control.For(V.Local.iCount,0,V.DataTable.OVERHEAD.RowCount--,1)
+		F.Data.DataTable.AddRow("COST","PROJECT",V.DataTable.OVERHEAD(V.Local.iCount).Project!FieldValTrim,"TYPE","O","DESCR","OVERHEAD","AMOUNT",V.DataTable.OVERHEAD(V.Local.iCount).Amount!FieldVal)
+	F.Intrinsic.Control.Next(V.Local.iCount)
+	
+	'PM.RECOGNIZE_REV = 'Y' AND
+	'get freight and other from job_dtl using jd.tran = '3':  NOTE: these are the costs being applied directly to the job through AP entries.
+	F.Intrinsic.String.Build("select RTRIM(PM.PROJECT) AS PROJECT, JD.LMO AS TYPE, IM.CODE_SORT AS DESCR, CONVERT(SUM(JD.AMOUNT_LABOR),SQL_NUMERIC) as AMOUNT FROM V_PROJECT_MASTER PM LEFT JOIN V_PROJECT_XREF PX ON PM.PROJECT = PX.PROJECT LEFT JOIN V_JOB_HEADER JH ON PX.WO = JH.JOB AND PX.WO_SUFF = JH.SUFFIX LEFT JOIN V_JOB_OPERATIONS JO ON PX.WO = JO.JOB AND PX.WO_SUFF = JO.SUFFIX AND PX.WO_SEQ = JO.SEQ LEFT JOIN V_JOB_DETAIL JD ON JO.JOB = JD.JOB AND JO.SUFFIX = JD.SUFFIX AND JO.SEQ = JD.SEQ LEFT JOIN V_INVENTORY_MSTR IM ON JD.PART = IM.PART AND JH.LOCATION = IM.LOCATION WHERE pm.date_closed = '1900-01-01' and JO.PROJ_GROUP <> '99X' AND JD.LMO <> 'Z' AND JD.TRAN = '3' AND JD.EDITED_WO_DTL <> 'R' AND JD.CHARGE_DATE BETWEEN '{0}' AND '{1}' GROUP BY PM.PROJECT, JD.LMO, IM.CODE_SORT ORDER BY PM.PROJECT, JD.LMO, IM.CODE_SORT",V.Global.dFrom.PervasiveDate,V.Global.dTo.PervasiveDate,V.Local.sSql)
+	'PROJECT | TYPE | DESCR | AMOUNT
+	
+	'include location if it was selected on the screen
+	F.Intrinsic.Control.If(V.Global.sWhere,>,"")
+		F.Intrinsic.String.Replace(V.Local.sSql,"WHERE",V.Global.sWhere,V.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	
+	'Create datatable for the AP transactions that are applied to the job
+	F.Data.DataTable.CreateFromSQL("APDATA","CON",V.Local.sSql)
+	
+	'add rows for freight and other
+	F.Intrinsic.Control.For(V.Local.iCount,0,V.DataTable.APDATA.ActiveRowCount--,1)
+	
+		F.Intrinsic.Control.SelectCase(V.DataTable.APDATA(V.Local.iCount).TYPE!FieldValTrim)
+		
+			F.Intrinsic.control.Case("M")
+				F.Data.DataTable.AddRow("COST","PROJECT",V.DataTable.APDATA(V.Local.iCount).Project!FieldValTrim,"TYPE",V.DataTable.APDATA(V.Local.iCount).Type!FieldValTrim,"DESCR","OTHER","AMOUNT",V.DataTable.APDATA(V.Local.iCount).Amount!FieldVal)
+				
+			F.Intrinsic.Control.Case("O")
+				F.Data.DataTable.AddRow("COST","PROJECT",V.DataTable.APDATA(V.Local.iCount).Project!FieldValTrim,"TYPE",V.DataTable.APDATA(V.Local.iCount).Type!FieldValTrim,"DESCR","FREIGHT","AMOUNT",V.DataTable.APDATA(V.Local.iCount).Amount!FieldVal)
+				
+		F.Intrinsic.Control.EndSelect
+		
+	F.Intrinsic.Control.Next(V.Local.iCount)
+	
+	'clear the data in the table for this terminal ID
+	F.ODBC.Connection!con.Execute("delete from GCG_4797_PRJ_COST")
+	
+	'write the new records to the table
+	F.Data.DataTable.SaveToDB("COST","CON","GCG_4797_PRJ_COST","",128)
+	
+	'open the template spreadsheet that uses this data in a cross tab
+	F.Intrinsic.Task.ShellExec("","OPEN",V.Local.sName,"",V.Caller.GasDir,1)
+	
+	F.Intrinsic.Control.CallSub(form_unload)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.build_byproject.End
+
+Program.Sub.format_grid.Start
+F.Intrinsic.Control.Try
+
+	F.Intrinsic.Control.If(V.DataTable.COST.Exists,=,True)
+		F.Intrinsic.Debug.SetLA("cost only view")
+		'header alignment, font bold
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","CREDIT","CELLHALIGNMENT","FAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DEBIT","CELLHALIGNMENT","FAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","TYPE","HEADERHALIGNMENT","NEAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DESCRIPTION","HEADERHALIGNMENT","NEAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DEBIT","HEADERHALIGNMENT","FAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","CREDIT","HEADERHALIGNMENT","FAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","TYPE","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DESCRIPTION","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DEBIT","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","CREDIT","HEADERFONTBOLD","True")
+		
+		'set column width
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","TYPE","MAXWIDTH","800")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DESCRIPTION","MAXWIDTH","800")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","CREDIT","MAXWIDTH","500")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DEBIT","MAXWIDTH","500")
+	
+	
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Debug.SetLA("project / description/ total / detail view")
+		'PROJECT HEADER
+		'bold project header
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","PROJECT","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","CUSTOMER","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","NAME_CUSTOMER","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Project_GV","DESCR","HEADERFONTBOLD","True")
+		
+		'PROJECT TOTALS
+		'bold totals header
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","MATERIAL","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","LABOR","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","OVERHEAD","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","OUTSIDE","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","FREIGHT","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_GV","OTHER","HEADERFONTBOLD","True")
+		'hide project column
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Total_gv","PROJECT","VISIBLE",False)
+		
+		'PROJECT DETAIL RECORDS
+		'set details header
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","JOB","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","SUFFIX","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","SEQ","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","TYPE","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","TRX_DATE","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","LMO","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","COST","HEADERFONTBOLD","True")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","OVERHEAD","HEADERFONTBOLD","True")
+	
+		'alignment of value columns
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","COST","HEADERHALIGNMENT","FAR")
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","OVERHEAD","HEADERHALIGNMENT","FAR")
+	
+		'hide project column
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","PROJECT","VISIBLE",False)
+		'cell font
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","JOB","CELLFONTUNDERLINE",True)
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","JOB","CELLFORECOLOR","Blue")
+		'date format
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","TRX_DATE","DisplayCustomDatetime","d")
+		'enable scrolling
+		Gui.Form.GGC_ProjCost.AllowMouseWheel(True)
+		Gui.Form.GGC_ProjCost.SetGridviewProperty("Details_GV","EnableAppearanceOddRow",True)
+		Gui.Form.GGC_ProjCost.SetGridviewProperty("Details_GV","ShowGroupPanel",True)
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","JOB","ReadOnly",True)
+		Gui.Form.GGC_ProjCost.SetColumnProperty("Details_GV","SUFFIX","ReadOnly",True)
+	
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.format_grid.End
+
+Program.Sub.date_range.Start
+F.Intrinsic.Control.Try
+	V.Local.sFromDate.Declare(String)
+	V.Local.sSql.Declare(String)
+	
+	F.Intrinsic.Control.If(V.Screen.Form!chkAllDates.CheckedAsBoolean,=,True)
+		V.Local.sFromDate.Set("19000101")
+		
+	F.Intrinsic.Control.Else
+		'getting the previous checkpoint so we have a date range
+		F.Intrinsic.String.Build("SELECT TOP 1 Chk_Date FROM V_Project_ChkPnt WHERE Chk_Date < '{0}' ORDER BY Chk_Date DESC",V.Screen.Form!txtChkPnt.Text,V.Local.sSql)
+		
+		F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSql,V.Local.sFromDate)
+		
+		'if this is the first checkpoint for the project, the above will return nothing
+		F.Intrinsic.Control.If(V.Local.sFromDate,=,"")
+			V.Local.sFromDate.Set("19000101")
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.Form!txtChkPnt.Text,=,"")
+		Gui.Form.txtChkPnt.Text(V.Ambient.Date.FormatYYYY/MM/DD)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Date.ConvertDString(V.Local.sFromDate,"YYYYMMDD",V.Global.dFrom)
+	F.Intrinsic.Date.DateAdd("D",1,V.Global.dFrom,V.Global.dFrom)
+	F.Intrinsic.Date.ConvertDString(V.Screen.Form!txtChkPnt.Text,"YYYYMMDD",V.Global.dTo)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.date_range.End
+
+Program.Sub.ResetState.Start
+F.Intrinsic.Control.Try
+	F.Intrinsic.Control.CallSub(ResetDataTables)
+	F.Intrinsic.Control.CallSub(ResetScreen)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.ResetState.End
+
+Program.Sub.ResetScreen.Start
+F.Intrinsic.Control.Try
+	Gui.Form.txtChkPnt.text("")
+	Gui.Form.txtProject.Text("")
+	Gui.Form.chkAllDates.Value(0)
+	Gui.Form.chkByProject.Value(0)
+	Gui.Form.txtLoc.Text("")
+	V.Global.dFrom.set("1/1/1900")
+	V.Global.dTo.set("1/1/1900")
+	
+	Gui.Form.GGC_ProjCost.ClearRows("Project_GV")
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.ResetScreen.End
+
+Program.Sub.ResetDataTables.Start
+F.Intrinsic.Control.Try	
+	F.Intrinsic.Control.If(V.DataTable.PROJECT$TOTALS$DETAILS.Exists,=,True)
+		F.Data.DataTable.Close("PROJECT$TOTALS$DETAILS")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.PROJECT$TOTALS.Exists,=,True)
+		F.Data.DataTable.Close("PROJECT$TOTALS")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.PROJECT.Exists,=,True)
+		F.Data.DataTable.Close("PROJECT")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.DataTable.COST.Exists,=,True)
+		F.Data.DataTable.Close("COST")
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.ResetDataTables.End
+
+Program.Sub.DisableControls.Start
+F.Intrinsic.Control.Try
+	Gui.Form.chkAllDates.Enabled(False)
+	Gui.Form.chkByProject.Enabled(False)
+	Gui.Form.txtChkPnt.Enabled(False)
+	Gui.Form.txtLoc.Enabled(False)
+	Gui.Form.txtProject.Enabled(False)
+	Gui.Form.cmdBrwFrom.Enabled(False)
+	Gui.Form.cmdBrwProj.Enabled(False)
+	Gui.Form.cmdClear.Enabled(False)
+	Gui.Form.cmdExport.Enabled(False)
+	Gui.Form.cmdLoc.Enabled(False)
+	Gui.Form.cmdView.Enabled(False)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.DisableControls.End
+
+Program.Sub.EnableControls.Start
+F.Intrinsic.Control.Try
+	Gui.Form.chkAllDates.Enabled(True)
+	Gui.Form.chkByProject.Enabled(True)
+	Gui.Form.txtChkPnt.Enabled(True)
+	Gui.Form.txtLoc.Enabled(True)
+	Gui.Form.txtProject.Enabled(True)
+	Gui.Form.cmdBrwFrom.Enabled(True)
+	Gui.Form.cmdBrwProj.Enabled(True)
+	Gui.Form.cmdClear.Enabled(True)
+	Gui.Form.cmdExport.Enabled(True)
+	Gui.Form.cmdLoc.Enabled(True)
+	Gui.Form.cmdView.Enabled(True)
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.EnableControls.End
+
+Program.Sub.cmdBrwFrom_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sSql.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.sTitles.Declare(String)
+	V.Local.iWidths.Declare(String)
+	
+	F.Intrinsic.Control.If(V.Screen.Form!txtProject.Text,=,"")
+		V.Local.sSql.Set("select distinct chk_date as Check_Date, chk_time as Check_Time from project_chkpnt ORDER BY CHECK_DATE DESC")
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("select distinct chk_date as Check_Date, chk_time as Check_Time from project_chkpnt where project = '{0}' ORDER BY CHECK_DATE DESC",V.Screen.Form!txtProject.Text,V.Local.sSql)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Split("DATE*!*TIME","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("400*!*400","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.UI.Browser("Select Check Point","CON",V.Local.sSql,V.Local.sTitles,V.Local.iWidths,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,=,"***CANCEL***")
+		F.Intrinsic.UI.Msgbox("Check Point not selected")
+		
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		Gui.Form.txtChkPnt.Text(V.Local.sRet(0).Trim)
+		
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrwFrom_Click.End
+
+Program.Sub.cmdBrwProj_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sSql.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.sTitles.Declare(String)
+	V.Local.iWidths.Declare(String)
+	
+	V.Local.sSql.Set("SELECT PROJECT, DESCR, CUSTOMER FROM PROJECT_MASTER ORDER BY PROJECT")
+	F.Intrinsic.String.Split("PROJECT*!*DESCRIPTION*!*CUSTOMER","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("400*!*700*!*400","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.UI.Browser("Select Project","CON",V.Local.sSql,V.Local.sTitles,V.Local.iWidths,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,=,"***CANCEL***")
+		F.Intrinsic.UI.Msgbox("No Project Selected")
+		
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		Gui.Form.txtProject.Text(V.Local.sRet(0).Trim)
+		
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdBrwProj_Click.End
+
+Program.Sub.cmdLoc_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sSql.Declare(String)
+	V.Local.sRet.Declare(String)
+	V.Local.sTitles.Declare(String)
+	V.Local.iWidths.Declare(String)
+	
+	V.Local.sSql.Set("SELECT LOCATION, LOCATION_DESC FROM V_LOCATIONS ORDER BY LOCATION")
+	F.Intrinsic.String.Split("LOCATION*!*DESCRIPTION","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("400*!*700","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.UI.Browser("Select Location","CON",V.Local.sSql,V.Local.sTitles,V.Local.iWidths,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,=,"***CANCEL***")
+		F.Intrinsic.UI.Msgbox("No Location Selected")
+		
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		Gui.Form.txtLoc.Text(V.Local.sRet(0).Trim)
+		
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdLoc_Click.End
+
+Program.Sub.cmdView_Click.Start
+F.Intrinsic.Control.Try
+	F.Intrinsic.Control.CallSub(DisableControls)
+	
+	F.Intrinsic.Control.If(V.Screen.Form!chkByProject.CheckedAsBoolean,=,False)
+		
+		F.Intrinsic.Control.If(V.Screen.Form!txtProject.Text,=,"","AND",V.Screen.Form!txtChkPnt.Text,=,"")
+			F.Intrinsic.UI.Msgbox("Must select either a checkpoint date, or a project.  The all dates function works with Project Selection","ERROR")
+			F.Intrinsic.Control.ExitSub
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.UI.InvokeWaitDialog("Gathering project data....","Processing")
+	
+	F.Intrinsic.Control.CallSub(ResetDataTables)
+	
+	F.Intrinsic.Control.If(V.Screen.Form!txtLoc.Text,<>,"")
+		F.Intrinsic.String.Build("WHERE JH.LOCATION = '{0}' AND ",V.Screen.Form!txtLoc.Text,V.Global.sWhere)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.If(V.Screen.Form!txtProject.Text,=,"")
+		
+		F.Intrinsic.Control.If(V.Screen.Form!chkByProject.CheckedAsBoolean,=,True)
+			F.Intrinsic.Control.CallSub(build_byProject)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.Control.CallSub(build_chkpnt)
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.Else
+		F.Intrinsic.Control.CallSub(build_proj)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.UI.CloseWaitDialog
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.Finally
+	F.Intrinsic.Control.CallSub(EnableControls)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdView_Click.End
+
+Program.Sub.cmdClear_Click.Start
+F.Intrinsic.Control.Try
+	F.Intrinsic.Control.CallSub(ResetState)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdClear_Click.End
+
+Program.Sub.cmdExport_Click.Start
+F.Intrinsic.Control.Try
+	V.Local.sFile.Declare(String)
+	V.Local.sMsg.Declare(String)
+	V.Local.bFileLocked.Declare(Boolean)
+	
+	F.Intrinsic.Control.If(V.DataTable.COST.Exists,=,True)
+		'export GL entry based on available program
+		F.Intrinsic.String.Build("{0}\Project_JE_{1}_{2}.csv",V.Caller.LocalGssTempDir,V.Global.dFrom.FormatYYYYMMDD,V.Screen.Form!txtChkPnt.Text,V.Local.sFile)
+		F.Intrinsic.File.IsFileLocked(V.Local.sFile,V.Local.bFileLocked)
+		
+		F.Intrinsic.Control.If(V.Local.bFileLocked)
+			F.Intrinsic.String.Build("The file is already open, please close and try again.{0}File: {1}",V.Ambient.NewLine,V.Local.sFile,V.Local.sMsg)
+			F.Intrinsic.UI.Msgbox(V.Local.sMsg,"File in use")
+			
+		F.Intrinsic.Control.Else
+			F.Data.Datatable.SaveToCSV("COST",V.Local.sFile,True)
+			F.Intrinsic.Task.ShellExec(0,"",V.Local.sFile,"","",1)
+			
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.Else	
+		'export based on available program
+		F.Intrinsic.String.Build("{0}\Project_{1}_cost_detail.csv",V.Caller.LocalGssTempDir,V.Screen.Form!txtProject.Text,V.Local.sFile)
+		F.Intrinsic.File.IsFileLocked(V.Local.sFile,V.Local.bFileLocked)
+		
+		F.Intrinsic.Control.If(V.Local.bFileLocked)
+			F.Intrinsic.String.Build("The file is already open, please close and try again.{0}File: {1}",V.Ambient.NewLine,V.Local.sFile,V.Local.sMsg)
+			F.Intrinsic.UI.Msgbox(V.Local.sMsg,"File in use")
+			
+		F.Intrinsic.Control.Else
+			F.Data.DataTable.SaveToCSV("PROJECT$TOTALS$DETAILS",V.Local.sFile,True)
+			F.Intrinsic.Task.ShellExec(0,"",V.Local.sFile,"","",1)
+			
+		F.Intrinsic.Control.EndIf
+		
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.cmdExport_Click.End
+
+Program.Sub.ProjCost_RowCellClick.Start
+F.Intrinsic.Control.Try
+	V.Local.sJob.Declare(String)
+	V.Local.sSuffix.Declare(String)
+	V.Local.sTemp.Declare(String)
+	
+	'open a work order
+	F.Intrinsic.Control.If(V.Args.Column.UCase,=,"JOB")
+		Gui.Form.GGC_ProjCost.GetCellValueByColumnName("Details_GV","JOB",V.Args.RowIndex,V.Local.sJob)
+		Gui.Form.GGC_ProjCost.GetCellValueByColumnName("Details_GV","SUFFIX",V.Args.RowIndex,V.Local.sSuffix)
+		
+		F.Intrinsic.String.ConcatCallWrapperArgs("7",V.Local.sJob,V.Local.sSuffix,"A",V.Local.sTemp)
+		F.Global.General.CallWrapperASync(450000,V.Local.sTemp)
+	F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.ProjCost_RowCellClick.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.Try
+	F.ODBC.Connection!con.Close
+	F.Intrinsic.Control.End
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(DisplayError, "Sub", V.Ambient.CurrentSubroutine, "Error", V.Ambient.ErrorNumber, "ErrorDescription", V.Ambient.ErrorDescription)
+F.Intrinsic.Control.EndTry
+Program.Sub.Form_UnLoad.End
+
+Program.Sub.DisplayError.Start
+F.Intrinsic.Control.Try
+	V.Local.sErrorMessage.Declare(String)
+	
+	F.Intrinsic.String.Build("Program: GCG_4797_PMFLOOOM_COST.g2u{0}{0}Sub: {1}{0}Error: {2}{0}Error Description: {3}",V.Ambient.NewLine,V.Args.Sub,V.Args.Error,V.Args.ErrorDescription,V.Local.sErrorMessage)
+	F.Intrinsic.Debug.SetLA(V.Local.sErrorMessage)
+	F.Intrinsic.UI.Msgbox(V.Local.sErrorMessage,"GAB Error")
+	
+	F.Intrinsic.Control.If(V.Args.Sub.LCase,=,"form_unload")
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.Catch
+	F.Intrinsic.UI.Msgbox("Fatal Error occurred in program GCG_4797_PMFLOOOM_COST.g2u","GAB Error")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.DisplayError.End
